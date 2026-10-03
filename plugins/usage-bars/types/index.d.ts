@@ -22,10 +22,10 @@ declare module 'claude-code' {
       current: Sample | null
       // The model's context window in tokens
       window: number
-      // Token totals so far, and the tokens each main turn processed
+      // Token totals so far, and the fresh tokens each main turn took
       totals: Totals
       turns: number[]
-      // The processed total when the last main turn closed
+      // The fresh total (new input + output) when the last main turn closed
       mark: number
       // The account's rate-limit windows, as last measured
       limits: Limit[]

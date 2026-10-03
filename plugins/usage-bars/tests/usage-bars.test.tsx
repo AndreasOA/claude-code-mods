@@ -24,6 +24,11 @@ function engine(on: On, readings: number[]) {
   }))
   on('session.measure', async (_$, e) => ({ changed: e.changed }))
   on('turn.complete', async (_$, e) => ({ text: e.answer }))
+  // A model request that answers at once; its usage rides the stop chunk, as the engine streams it
+  on('turn.step', async function* (_$, e) {
+    yield { kind: 'stop' as const, stopReason: 'end_turn' as const, usage }
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const, usage }
+  })
   on('ui.render', { component: 'PromptHint' }, async ($, e) => {
     const { Text } = $.ui.resolve(e)
     return <Text>{e.props.hint}</Text>
@@ -32,21 +37,25 @@ function engine(on: On, readings: number[]) {
 
 const usage = { model: 'claude-opus-5-5', input_tokens: 1000, output_tokens: 500, cache_read_input_tokens: 40_000, cache_creation_input_tokens: 2000 }
 const turn = { answer: '', durationMs: 1000, isAborted: false, turnId: 't', reason: 'answer', usage } as never
+const step = { turnId: 't', index: 0, model: 'claude-opus-5-5', messageCount: 1 }
 const measure: SessionMeasureInput = { rateLimits: [], context: { window: 200_000 }, changed: ['context'] }
 
 test('draws the ctx and per-turn rows from the readings', async ($, on) => {
   engine(on, [20_000, 50_000, 130_000])
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
-  await $.turn.complete(turn)
-  await $.turn.complete(turn)
+  // Two turns of one model request each
+  for (let i = 0; i < 2; i++) {
+    for await (const _ of $.turn.step(step)) void _
+    await $.turn.complete(turn)
+  }
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...HINT, surface })
     expect(await ui.find({ type: 'Text', text: /\? for shortcuts/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /65%/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /130k\/200k/ })).toBeDefined()
-    // Two turns of 1k in, 500 out, 40k cache read, 2k cache write: 80000 / 86000 served from cache
+    // Two requests of 1k in, 500 out, 40k cache read, 2k cache write: 80000 / 86000 = 93.02 % served from cache
     expect(await ui.find({ type: 'Text', text: /^tok$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /in 2\.0k\s+out 1\.0k\s+cache 80\.0k 93%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /new 6\.0k\s+out 1\.0k\s+reread 80\.0k\s+hit 93\.0%/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^5h$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /34%/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /↻2h(09|10)m/ })).toBeDefined()

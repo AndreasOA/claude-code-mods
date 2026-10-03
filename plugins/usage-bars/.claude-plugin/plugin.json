@@ -1,6 +1,6 @@
 {
   "name": "usage-bars",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sparklines of context-window fill and tokens added per turn under the prompt",
   "types": "./types/index.d.ts",
   "author": {

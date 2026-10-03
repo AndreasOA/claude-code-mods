@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, RenderChildren } from 'claude-code'
+import type { EngineInterface, Register, RenderChildren, TurnUsage } from 'claude-code'
 
 import type { GitInfo, Limit, ModelInfo, Sample, Totals } from '../types'
 
@@ -101,9 +101,19 @@ async function measure($: EngineInterface) {
   await update($, current, () => sample)
 }
 
-// Everything the session's model calls have processed so far
-function processed(t: Totals): number {
-  return t.input + t.output + t.cacheRead + t.cacheWrite
+// The tokens the model actually had to take in or write: everything but the cheap cache re-reads
+function fresh(t: Totals): number {
+  return t.input + t.cacheWrite + t.output
+}
+
+// Add one model request's usage to the session's totals
+async function count($: EngineInterface, u: TurnUsage) {
+  await update($, totals, t => ({
+    input: t.input + u.input_tokens,
+    output: t.output + u.output_tokens,
+    cacheRead: t.cacheRead + u.cache_read_input_tokens,
+    cacheWrite: t.cacheWrite + u.cache_creation_input_tokens,
+  }))
 }
 
 // Close a turn: keep its reading as one bar, the newest MAX_BARS of them
@@ -137,36 +147,40 @@ export const register: Register = on => {
     return next(e)
   })
 
-  // Every turn adds its tokens to the totals; a main-loop turn also closes a bar,
-  // its tokens being everything processed since the last one (its subagents' included)
+  // Every model request, a subagent's included, adds its usage as soon as it answers;
+  // the main loop's also carry the model and effort actually sent
+  on('turn.step', async function* ($, e, next) {
+    if (e.agentId === undefined) {
+      const effort = e.effort === undefined ? null : String(e.effort)
+      // A request names the bare id; keep the session's own spelling (its [1m] suffix) while it is the same model
+      await update($, model, m => ({ name: m && m.name.replace(/\[.*\]$/, '') === e.model ? m.name : e.model, effort: effort ?? m?.effort ?? null }))
+    }
+    // Pass every chunk on; the usage rides the stop chunk or the step's result
+    const stream = next(e)
+    let u: TurnUsage | null = null
+    for (let r = await stream.next(); ; r = await stream.next()) {
+      if (r.done) {
+        const result = r.value ?? (await stream.result)
+        u = result?.usage ?? u
+        if (u) await count($, u)
+        return result
+      }
+      if (r.value.kind === 'stop' && r.value.usage) u = r.value.usage
+      yield r.value
+    }
+  })
+
+  // A main-loop turn ended: one bar for it, its fresh tokens since the last one (its subagents' included)
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
-    const u = e.usage
-    const sum = u
-      ? await update($, totals, t => ({
-          input: t.input + u.input_tokens,
-          output: t.output + u.output_tokens,
-          cacheRead: t.cacheRead + u.cache_read_input_tokens,
-          cacheWrite: t.cacheWrite + u.cache_creation_input_tokens,
-        }))
-      : await read($, totals)
     if (e.agentId === undefined) {
-      const now = processed(sum)
+      const now = fresh(await read($, totals))
       const spent = now - Math.min(await read($, mark), now)
       await update($, mark, () => now)
       await update($, turns, list => [...list, spent].slice(-MAX_BARS))
       await record($)
     }
     return done
-  })
-
-  // The main loop's model requests carry the model and effort actually sent
-  on('turn.step', async function* ($, e, next) {
-    if (e.agentId === undefined) {
-      const effort = e.effort === undefined ? null : String(e.effort)
-      await update($, model, m => ({ name: e.model, effort: effort ?? m?.effort ?? null }))
-    }
-    return yield* next(e)
   })
 
   on('classic.PostToolUse', async ($, e, next) => {
@@ -194,9 +208,9 @@ export const register: Register = on => {
 
     const sum = await read($, totals)
     const perTurn = await read($, turns)
-    // How much of the input the prompt cache served
+    // How much of the input the prompt cache served, rounded down so it never claims 100 % early
     const fed = sum.input + sum.cacheRead + sum.cacheWrite
-    const hit = fed > 0 ? Math.round((sum.cacheRead / fed) * 100) : 0
+    const hit = fed > 0 ? Math.floor((sum.cacheRead / fed) * 1000) / 10 : 0
 
     const engineLine = await next(e)
 
@@ -239,18 +253,17 @@ export const register: Register = on => {
             {latest.percent}% <Text dimColor>{short(latest.tokens)}/{short(size)}</Text>
           </Text>,
         ),
-      processed(sum) > 0 &&
+      fresh(sum) + sum.cacheRead > 0 &&
         group(
           'tok',
           'tok',
           <Text color="cyan">{bars(perTurn, Math.max(...perTurn, 1))}</Text>,
           <Text>
-            <Text dimColor>in </Text>
-            {short(sum.input)}
+            <Text dimColor>new </Text>
+            {short(sum.input + sum.cacheWrite)}
             <Text dimColor>  out </Text>
             {short(sum.output)}
-            <Text dimColor>  cache </Text>
-            {short(sum.cacheRead)} <Text dimColor>{hit}%</Text>
+            <Text dimColor>  reread {short(sum.cacheRead)}  hit {hit.toFixed(1)}%</Text>
           </Text>,
         ),
       ...windows.map(w =>
