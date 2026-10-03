@@ -22,11 +22,15 @@ declare module 'claude-code' {
       current: Sample | null
       // The model's context window in tokens
       window: number
-      // Token totals so far, and the fresh tokens each main turn took
+      // Token totals so far, and the US dollars each main turn cost
       totals: Totals
       turns: number[]
-      // The fresh total (new input + output) when the last main turn closed
+      // The session cost when the last main turn closed
       mark: number
+      // US dollars spent this session as the engine prices it, null until priced
+      cost: number | null
+      // Share of the latest request's input the prompt cache served, 0 to 1
+      hit: number | null
       // The account's rate-limit windows, as last measured
       limits: Limit[]
       // The session's model and effort, null until known

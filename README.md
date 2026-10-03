@@ -13,7 +13,7 @@ One row under the prompt, refreshed after every turn:
 | `⎇` | git branch, `●` uncommitted files, `↑`/`↓` commits ahead of / behind upstream, `✓` when clean |
 | `◆` | the model the main loop runs and its effort level |
 | `ctx` | context-window fill: one bar per turn, then the live % and tokens / window |
-| `tok` | fresh tokens per turn (bars), then live session totals, subagents included: `new` input the model had to read (uncached + newly cached), `out` generated, `reread` cheap cache re-reads, and the cache `hit` rate |
+| `tok` | what each turn cost (bars), then live session figures, subagents included: `in` tokens read (cached or not), `out` tokens generated, the latest request's cache `hit` rate (yellow below 90 %, red below 50 %: the cache went cold) and the session cost in `$` as Claude Code prices it |
 | `5h` / `7d` | your rate-limit windows: % used and time until reset (subscription accounts) |
 
 Charts turn yellow from 60 % and red from 85 %. The row wraps on narrow terminals.

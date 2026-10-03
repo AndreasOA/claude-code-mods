@@ -16,6 +16,8 @@ const current = atom({ plugin: 'usage-bars', key: 'current' } as const, null as 
 const totals = atom({ plugin: 'usage-bars', key: 'totals' } as const, { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } as Totals)
 const turns = atom({ plugin: 'usage-bars', key: 'turns' } as const, [] as number[])
 const mark = atom({ plugin: 'usage-bars', key: 'mark' } as const, 0)
+const cost = atom({ plugin: 'usage-bars', key: 'cost' } as const, null as number | null)
+const hit = atom({ plugin: 'usage-bars', key: 'hit' } as const, null as number | null)
 const model = atom({ plugin: 'usage-bars', key: 'model' } as const, null as ModelInfo | null)
 const git = atom({ plugin: 'usage-bars', key: 'git' } as const, null as GitInfo | null)
 
@@ -93,7 +95,8 @@ async function readGit($: EngineInterface) {
 
 // Refresh the live reading and the rate-limit windows
 async function measure($: EngineInterface) {
-  const { context, rateLimits } = await $.session.usage()
+  const { context, rateLimits, cost: spent } = await $.session.usage()
+  await update($, cost, () => spent?.usd ?? null)
   await update($, limits, () => rateLimits.map(({ kind, percentUsed, resetsAt }) => ({ kind, percentUsed, resetsAt })))
   if (context.tokens === undefined) return
   const sample: Sample = { tokens: context.tokens, percent: context.percent ?? 0 }
@@ -101,9 +104,9 @@ async function measure($: EngineInterface) {
   await update($, current, () => sample)
 }
 
-// The tokens the model actually had to take in or write: everything but the cheap cache re-reads
-function fresh(t: Totals): number {
-  return t.input + t.cacheWrite + t.output
+// Every input token the model read, from the cache or not
+function inputs(t: { input: number; cacheRead: number; cacheWrite: number }): number {
+  return t.input + t.cacheRead + t.cacheWrite
 }
 
 // Add one model request's usage to the session's totals
@@ -114,6 +117,8 @@ async function count($: EngineInterface, u: TurnUsage) {
     cacheRead: t.cacheRead + u.cache_read_input_tokens,
     cacheWrite: t.cacheWrite + u.cache_creation_input_tokens,
   }))
+  const read = inputs({ input: u.input_tokens, cacheRead: u.cache_read_input_tokens, cacheWrite: u.cache_creation_input_tokens })
+  if (read > 0) await update($, hit, () => u.cache_read_input_tokens / read)
 }
 
 // Close a turn: keep its reading as one bar, the newest MAX_BARS of them
@@ -170,15 +175,15 @@ export const register: Register = on => {
     }
   })
 
-  // A main-loop turn ended: one bar for it, its fresh tokens since the last one (its subagents' included)
+  // A main-loop turn ended: one bar for it, what it cost since the last one (its subagents' included)
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId === undefined) {
-      const now = fresh(await read($, totals))
+      await record($)
+      const now = (await read($, cost)) ?? 0
       const spent = now - Math.min(await read($, mark), now)
       await update($, mark, () => now)
       await update($, turns, list => [...list, spent].slice(-MAX_BARS))
-      await record($)
     }
     return done
   })
@@ -208,9 +213,11 @@ export const register: Register = on => {
 
     const sum = await read($, totals)
     const perTurn = await read($, turns)
-    // How much of the input the prompt cache served, rounded down so it never claims 100 % early
-    const fed = sum.input + sum.cacheRead + sum.cacheWrite
-    const hit = fed > 0 ? Math.floor((sum.cacheRead / fed) * 1000) / 10 : 0
+    const spent = await read($, cost)
+    // The latest request's cache hit, rounded down so it never claims 100 % early; a cold cache shows in colour
+    const last = await read($, hit)
+    const hitPct = last === null ? null : Math.floor(last * 1000) / 10
+    const hitColor = hitPct === null || hitPct >= 90 ? undefined : hitPct >= 50 ? 'yellow' : 'red'
 
     const engineLine = await next(e)
 
@@ -253,17 +260,19 @@ export const register: Register = on => {
             {latest.percent}% <Text dimColor>{short(latest.tokens)}/{short(size)}</Text>
           </Text>,
         ),
-      fresh(sum) + sum.cacheRead > 0 &&
+      inputs(sum) + sum.output > 0 &&
         group(
           'tok',
           'tok',
-          <Text color="cyan">{bars(perTurn, Math.max(...perTurn, 1))}</Text>,
+          <Text color="cyan">{bars(perTurn, Math.max(...perTurn, 0.000001))}</Text>,
           <Text>
-            <Text dimColor>new </Text>
-            {short(sum.input + sum.cacheWrite)}
+            <Text dimColor>in </Text>
+            {short(inputs(sum))}
             <Text dimColor>  out </Text>
             {short(sum.output)}
-            <Text dimColor>  reread {short(sum.cacheRead)}  hit {hit.toFixed(1)}%</Text>
+            {hitPct !== null && <Text dimColor>  hit </Text>}
+            {hitPct !== null && <Text color={hitColor}>{hitPct.toFixed(1)}%</Text>}
+            {spent !== null && <Text>  ${spent.toFixed(2)}</Text>}
           </Text>,
         ),
       ...windows.map(w =>
