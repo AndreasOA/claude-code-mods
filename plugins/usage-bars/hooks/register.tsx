@@ -5,6 +5,8 @@ import type { GitInfo, Limit, ModelInfo, Sample, Totals } from '../types'
 
 // How many readings the charts keep, one bar each
 const MAX_BARS = 20
+// How many of them the ctx chart draws: the fill climbs slowly, so the latest few say enough
+const CTX_BARS = 8
 
 // Eight bar heights, from the shortest to the tallest
 const BLOCKS = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█']
@@ -255,7 +257,7 @@ export const register: Register = on => {
         group(
           'ctx',
           'ctx',
-          <Text color={fillColor(latest.percent)}>{bars(list.map(s => s.percent), 100)}</Text>,
+          <Text color={fillColor(latest.percent)}>{bars(list.slice(-CTX_BARS).map(s => s.percent), 100)}</Text>,
           <Text>
             {latest.percent}% <Text dimColor>{short(latest.tokens)}/{short(size)}</Text>
           </Text>,

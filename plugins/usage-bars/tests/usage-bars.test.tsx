@@ -110,3 +110,13 @@ test('a cold cache on the latest request shows as a red hit rate', async ($, on)
   expect(JSON.stringify(rate)).toContain('red')
   await ui.unmount()
 })
+
+test('the ctx chart draws only the last 8 turns', async ($, on) => {
+  engine(on, Array.from({ length: 11 }, (_, i) => 10_000 * (i + 1)))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  for (let i = 0; i < 10; i++) await $.turn.complete(turn)
+  const ui = await $.ui.mount({ ...HINT, surface: 'terminal' })
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
+  expect(texts[texts.indexOf('ctx') + 1]?.length).toBe(8)
+  await ui.unmount()
+})
