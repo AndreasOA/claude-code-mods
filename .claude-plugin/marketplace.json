@@ -1,0 +1,17 @@
+{
+  "name": "ao-claude-mods",
+  "owner": { "name": "Andreas Oberdammer" },
+  "metadata": { "description": "Small Claude Code mods: a usage row under the prompt and a live subagent pane" },
+  "plugins": [
+    {
+      "name": "usage-bars",
+      "source": "./plugins/usage-bars",
+      "description": "One row under the prompt: git state, model and effort, context fill, tokens per turn, 5h and 7d limits"
+    },
+    {
+      "name": "agent-watch",
+      "source": "./plugins/agent-watch",
+      "description": "Docks a narrow pane beside the transcript that follows each running subagent live"
+    }
+  ]
+}

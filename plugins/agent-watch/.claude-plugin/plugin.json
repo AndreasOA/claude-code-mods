@@ -1,0 +1,10 @@
+{
+  "name": "agent-watch",
+  "version": "0.1.0",
+  "description": "Docks a narrow pane beside the transcript that follows each running subagent live",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Andreas Oberdammer"
+  },
+  "license": "MIT"
+}
