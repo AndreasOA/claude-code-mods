@@ -1,0 +1,10 @@
+{
+  "name": "copilot-skin",
+  "version": "0.1.0",
+  "description": "Reskins Claude Code as GitHub Copilot: the goggled Copilot guy, Copilot purples and wording",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Andreas Oberdammer"
+  },
+  "license": "MIT"
+}

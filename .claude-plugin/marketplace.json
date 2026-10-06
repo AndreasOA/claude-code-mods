@@ -1,7 +1,11 @@
 {
   "name": "ao-claude-mods",
-  "owner": { "name": "Andreas Oberdammer" },
-  "metadata": { "description": "Small Claude Code mods: a usage row under the prompt and a live subagent pane" },
+  "owner": {
+    "name": "Andreas Oberdammer"
+  },
+  "metadata": {
+    "description": "Small Claude Code mods: a usage row under the prompt, a live subagent pane and a GitHub Copilot skin"
+  },
   "plugins": [
     {
       "name": "usage-bars",
@@ -12,6 +16,11 @@
       "name": "agent-watch",
       "source": "./plugins/agent-watch",
       "description": "Docks a narrow pane beside the transcript that follows each running subagent live"
+    },
+    {
+      "name": "copilot-skin",
+      "source": "./plugins/copilot-skin",
+      "description": "Reskins Claude Code as GitHub Copilot: the goggled Copilot guy, Copilot purples and wording"
     }
   ]
 }

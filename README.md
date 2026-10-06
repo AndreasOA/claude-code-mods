@@ -1,6 +1,6 @@
 # claude-code-mods
 
-Two small [Claude Code](https://claude.com/claude-code) mods (function-hook plugins) as a plugin marketplace.
+Small [Claude Code](https://claude.com/claude-code) mods (function-hook plugins) as a plugin marketplace.
 
 ## usage-bars
 
@@ -33,12 +33,26 @@ When a subagent starts, a narrow pane docks beside the transcript and follows ea
 
 The pane opens on its own from 144 terminal columns (a Claude Code rule for panes nobody asked for); on a narrower terminal run `/agents-pane`.
 
-## Install
+## copilot-skin
+
+Reskins Claude Code to look like GitHub Copilot:
+
+![copilot-skin](docs/copilot-skin-head.png)
+
+- **Welcome band**: the goggled Copilot guy in pixel art above the prompt (he blinks), with the GitHub Copilot title and your folder. It steps aside at your first prompt; `/copilot` brings it back. Narrow terminals and the desktop app get a one-line title instead.
+- **Spinner**: `Thinking…`, `Generating response…`, `Running tool…` in place of the whimsical verbs.
+- **Turn line**: `◆ Copilot worked for 1m 4s`.
+- **Replies** open with Copilot's purple `●`.
+- **Hint line** ends with `· GitHub Copilot`; startup notices say Copilot instead of Claude.
+
+It only changes how the transcript and prompt are drawn. The model, its answers and the startup logo stay Claude's (no mod can reach the logo).
+
 
 ```
 /plugin marketplace add AndreasOA/claude-code-mods
 /plugin install usage-bars@ao-claude-mods
 /plugin install agent-watch@ao-claude-mods
+/plugin install copilot-skin@ao-claude-mods
 ```
 
 Restart Claude Code (or open a new session) to load them. `/plugin marketplace update ao-claude-mods` pulls new versions.
